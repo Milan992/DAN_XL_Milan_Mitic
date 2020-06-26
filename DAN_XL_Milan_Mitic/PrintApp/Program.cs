@@ -8,16 +8,19 @@ namespace PrintApp
 {
     class Program
     {
-        static int counter = 0
-            ;
+        // create 2 printer threads.
+        static Thread printerOne = new Thread(() => PrintOne(document, currentPcName));
+        static Thread printerTwo = new Thread(() => PrintTwo(document, currentPcName));
+
         static bool AllPrinted = false;
 
         static Random random = new Random();
 
-        //   static CountdownEvent countdown = new CountdownEvent(10);
         static EventWaitHandle requestOne = new AutoResetEvent(false);
         static EventWaitHandle requestTwo = new AutoResetEvent(false);
         static readonly object l = new object();
+        static readonly object l2 = new object();
+        static readonly object l3 = new object();
 
         static Document document = new Document();
 
@@ -40,7 +43,7 @@ namespace PrintApp
 
             while (color != "#")
             {
-                Console.WriteLine("\nPlease enter a color to save to the palet. Press '#' to quit");
+                Console.WriteLine("\nPlease enter a color to save to the palet. Press '#' when you finish entering colors to start the program.");
                 color = Console.ReadLine();
                 if (!string.IsNullOrEmpty(color) && color != "#")
                 {
@@ -69,9 +72,6 @@ namespace PrintApp
                 pc.Start();
             }
 
-            // create 2 printer threads.
-            Thread printerOne = new Thread(() => PrintOne(document, currentPcName));
-            Thread printerTwo = new Thread(() => PrintTwo(document, currentPcName));
             printerOne.Name = "PRINTER_1";
             printerTwo.Name = "PRINTER_2";
             printerOne.Start();
@@ -86,15 +86,35 @@ namespace PrintApp
         public static void PrintOne(Document document, string pcName)
         {
             requestOne.WaitOne();
-
-            while (!AllPrinted)
+            lock (l2)
             {
-                Thread.Sleep(1000);
-                Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+                while (!AllPrinted)
+                {
+                    Thread.Sleep(1000);
+                    Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+                    Console.WriteLine("");
 
-                AllPrinted = true;
-                Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
-                Console.ReadLine();
+                    string check;
+                    try
+                    {
+                        check = pcsPrintedAtLeastOne.Single(s => s == currentPcName);
+                    }
+                    catch
+                    {
+                        check = "";
+                    }
+                    if (currentPcName != check)
+                    {
+                        pcsPrintedAtLeastOne.Add(currentPcName);
+                    }
+                    if (pcsPrintedAtLeastOne.Count == 10)
+                    {
+                        AllPrinted = true;
+                        printerTwo.Abort();
+                        Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
+                        Console.ReadLine();
+                    }
+                }
             }
         }
 
@@ -107,10 +127,35 @@ namespace PrintApp
         {
             requestTwo.WaitOne();
 
-            while (!AllPrinted)
+            lock (l3)
             {
-                Thread.Sleep(1000);
-                Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+                while (!AllPrinted)
+                {
+                    Thread.Sleep(1000);
+                    Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+                    Console.WriteLine("");
+
+                    string check;
+                    try
+                    {
+                        check = pcsPrintedAtLeastOne.Single(s => s == currentPcName);
+                    }
+                    catch
+                    {
+                        check = "";
+                    }
+                    if (currentPcName != check)
+                    {
+                        pcsPrintedAtLeastOne.Add(currentPcName);
+                    }
+                    if (pcsPrintedAtLeastOne.Count == 10)
+                    {
+                        AllPrinted = true;
+                        printerOne.Abort();
+                        Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
+                        Console.ReadLine();
+                    }
+                }
             }
         }
 
@@ -137,7 +182,7 @@ namespace PrintApp
 
                     currentPcName = Thread.CurrentThread.Name;
 
-                    Console.WriteLine("\n{0} sent a print request for a {1} format document, color: {2}, orientation: {3}.",
+                    Console.WriteLine("{0} sent a print request for a {1} format document, color: {2}, orientation: {3}.",
                         Thread.CurrentThread.Name, document.Format, document.Color, document.Orientation);
 
                     int printerNumber = random.Next(1, 3);
