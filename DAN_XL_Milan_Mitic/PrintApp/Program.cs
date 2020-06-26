@@ -10,6 +10,7 @@ namespace PrintApp
         // create 2 printer threads.
         static Thread printerOne = new Thread(() => PrintOne(document, currentPcName));
         static Thread printerTwo = new Thread(() => PrintTwo(document, currentPcName));
+        static Thread pc;
 
         static bool AllPrinted = false;
 
@@ -67,7 +68,6 @@ namespace PrintApp
             getColors.Join();
 
             // create 10 pc threads.
-            Thread pc;
             for (int i = 0; i < 10; i++)
             {
                 pc = new Thread(() => SendRequest());
@@ -122,7 +122,7 @@ namespace PrintApp
                     Thread.Sleep(1000);
                     Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
                     Console.WriteLine("");
-                    
+
                     if (!pcsPrintedAtLeastOne.Contains(currentPcName))
                     {
                         pcsPrintedAtLeastOne.Add(currentPcName);
@@ -200,7 +200,10 @@ namespace PrintApp
         {
             ce.Wait();
             AllPrinted = true;
-            Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
+            printerOne.Abort();
+            printerTwo.Abort();
+            pc.Abort();
+            Console.WriteLine("\n\tALL PRINTED. . . press any key to exit\n");
             Console.ReadLine();
         }
     }
