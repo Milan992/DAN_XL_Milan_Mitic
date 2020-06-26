@@ -7,15 +7,17 @@ namespace PrintApp
 {
     class Program
     {
+        static bool AllPrinted = false;
+
         static Random random = new Random();
 
         static EventWaitHandle request = new AutoResetEvent(false);
+        static readonly object l = new object();
 
         static Document document = new Document();
 
-        static string[] formats = { "A4", "A5" };
+        static string[] formats = { "A3", "A4" };
         static string[] orientations = { "portrait", "landscape" };
-
         // list to add all the colors from the txt file
         static List<string> colors = new List<string>();
 
@@ -46,8 +48,9 @@ namespace PrintApp
                     }
                 }
             }
-
-            FillColorList();
+            Thread getColors = new Thread(() => FillColorList());
+            getColors.Start();
+            getColors.Join();
 
             // create 10 pc threads.
             Thread pc;
@@ -78,13 +81,23 @@ namespace PrintApp
         /// </summary>
         public static void SendRequest()
         {
-            // choose format
-            document.Format = formats[random.Next(0, 2)];
+            while (!AllPrinted)
+            {
+                Thread.Sleep(100);
+                lock (l)
+                {
+                    // choose format
+                    document.Format = formats[random.Next(0, 2)];
 
-            // choose color
-            document.Color = colors[random.Next(0, colors.Count)];
+                    // choose color
+                    document.Color = colors[random.Next(0, colors.Count)];
 
-            document.Orientation = orientations[random.Next(0, 2)];
+                    document.Orientation = orientations[random.Next(0, 2)];
+
+                    Console.WriteLine("\n{0} sent a print request for a {1} format document, color: {2}, orientation: {3}.", 
+                        Thread.CurrentThread.Name, document.Format, document.Color, document.Orientation);
+                }
+            }
         }
 
         /// <summary>
@@ -94,7 +107,7 @@ namespace PrintApp
         {
             try
             {
-                using (StreamReader sr = new StreamReader("Palet.txt"))
+                using (StreamReader sr = new StreamReader(@"..\..\Palet.txt"))
                 {
                     string line;
                     while ((line = sr.ReadLine()) != null)
