@@ -1,25 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace PrintApp
 {
     class Program
     {
+        static int counter = 0
+            ;
         static bool AllPrinted = false;
 
         static Random random = new Random();
 
-        static EventWaitHandle request = new AutoResetEvent(false);
+        //   static CountdownEvent countdown = new CountdownEvent(10);
+        static EventWaitHandle requestOne = new AutoResetEvent(false);
+        static EventWaitHandle requestTwo = new AutoResetEvent(false);
         static readonly object l = new object();
 
         static Document document = new Document();
+
+        static string currentPcName = "";
 
         static string[] formats = { "A3", "A4" };
         static string[] orientations = { "portrait", "landscape" };
         // list to add all the colors from the txt file
         static List<string> colors = new List<string>();
+        static List<string> pcsPrintedAtLeastOne = new List<string>();
 
         static void Main(string[] args)
         {
@@ -28,7 +36,7 @@ namespace PrintApp
             string color = "";
 
             // clear the file from previous program run insert.
-            File.WriteAllText(@"..\..\Palet.txt", "");
+            File.WriteAllText(@"..\..\Palet.txt", "white");
 
             while (color != "#")
             {
@@ -57,23 +65,53 @@ namespace PrintApp
             for (int i = 0; i < 10; i++)
             {
                 pc = new Thread(() => SendRequest());
-                pc.Name = "PC+" + i;
+                pc.Name = "PC_" + i;
                 pc.Start();
             }
 
             // create 2 printer threads.
-            Thread printer;
-            for (int i = 0; i < 2; i++)
+            Thread printerOne = new Thread(() => PrintOne(document, currentPcName));
+            Thread printerTwo = new Thread(() => PrintTwo(document, currentPcName));
+            printerOne.Name = "PRINTER_1";
+            printerTwo.Name = "PRINTER_2";
+            printerOne.Start();
+            printerTwo.Start();
+        }
+
+        /// <summary>
+        /// Writes out on the console when the document is printed.
+        /// </summary>
+        /// <param name="document"></param>
+        /// <param name="pcName"></param>
+        public static void PrintOne(Document document, string pcName)
+        {
+            requestOne.WaitOne();
+
+            while (!AllPrinted)
             {
-                printer = new Thread(() => Print(document));
-                printer.Name = "PRINTER_" + i;
-                printer.Start();
+                Thread.Sleep(1000);
+                Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+
+                AllPrinted = true;
+                Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
+                Console.ReadLine();
             }
         }
 
-        public static void Print(Document document)
+        /// <summary>
+        /// Writes out on the console when the document is printed.
+        /// </summary>
+        /// <param name="document"></param>
+        /// <param name="pcName"></param>
+        public static void PrintTwo(Document document, string pcName)
         {
+            requestTwo.WaitOne();
 
+            while (!AllPrinted)
+            {
+                Thread.Sleep(1000);
+                Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
+            }
         }
 
         /// <summary>
@@ -81,21 +119,36 @@ namespace PrintApp
         /// </summary>
         public static void SendRequest()
         {
+
             while (!AllPrinted)
             {
-                Thread.Sleep(100);
                 lock (l)
                 {
+                    Thread.Sleep(100);
+
                     // choose format
                     document.Format = formats[random.Next(0, 2)];
 
                     // choose color
                     document.Color = colors[random.Next(0, colors.Count)];
 
+                    //choose orientation
                     document.Orientation = orientations[random.Next(0, 2)];
 
-                    Console.WriteLine("\n{0} sent a print request for a {1} format document, color: {2}, orientation: {3}.", 
+                    currentPcName = Thread.CurrentThread.Name;
+
+                    Console.WriteLine("\n{0} sent a print request for a {1} format document, color: {2}, orientation: {3}.",
                         Thread.CurrentThread.Name, document.Format, document.Color, document.Orientation);
+
+                    int printerNumber = random.Next(1, 3);
+                    if (printerNumber == 1)
+                    {
+                        requestOne.Set();
+                    }
+                    else
+                    {
+                        requestTwo.Set();
+                    }
                 }
             }
         }
