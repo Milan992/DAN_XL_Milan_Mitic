@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 
 namespace PrintApp
@@ -16,6 +15,7 @@ namespace PrintApp
 
         static Random random = new Random();
 
+        static CountdownEvent ce = new CountdownEvent(10);
         static EventWaitHandle requestOne = new AutoResetEvent(false);
         static EventWaitHandle requestTwo = new AutoResetEvent(false);
         static readonly object l = new object();
@@ -30,6 +30,7 @@ namespace PrintApp
         static string[] orientations = { "portrait", "landscape" };
         // list to add all the colors from the txt file
         static List<string> colors = new List<string>();
+        // list to add all distinct PCs that printed at least one document
         static List<string> pcsPrintedAtLeastOne = new List<string>();
 
         static void Main(string[] args)
@@ -59,6 +60,8 @@ namespace PrintApp
                     }
                 }
             }
+            Thread stopper = new Thread(() => Stopper());
+            stopper.Start();
             Thread getColors = new Thread(() => FillColorList());
             getColors.Start();
             getColors.Join();
@@ -94,25 +97,10 @@ namespace PrintApp
                     Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
                     Console.WriteLine("");
 
-                    string check;
-                    try
-                    {
-                        check = pcsPrintedAtLeastOne.Single(s => s == currentPcName);
-                    }
-                    catch
-                    {
-                        check = "";
-                    }
-                    if (currentPcName != check)
+                    if (!pcsPrintedAtLeastOne.Contains(currentPcName))
                     {
                         pcsPrintedAtLeastOne.Add(currentPcName);
-                    }
-                    if (pcsPrintedAtLeastOne.Count == 10)
-                    {
-                        AllPrinted = true;
-                        printerTwo.Abort();
-                        Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
-                        Console.ReadLine();
+                        ce.Signal();
                     }
                 }
             }
@@ -134,26 +122,11 @@ namespace PrintApp
                     Thread.Sleep(1000);
                     Console.WriteLine("\n{0} can take {1} format document from " + Thread.CurrentThread.Name, currentPcName, document.Format);
                     Console.WriteLine("");
-
-                    string check;
-                    try
-                    {
-                        check = pcsPrintedAtLeastOne.Single(s => s == currentPcName);
-                    }
-                    catch
-                    {
-                        check = "";
-                    }
-                    if (currentPcName != check)
+                    
+                    if (!pcsPrintedAtLeastOne.Contains(currentPcName))
                     {
                         pcsPrintedAtLeastOne.Add(currentPcName);
-                    }
-                    if (pcsPrintedAtLeastOne.Count == 10)
-                    {
-                        AllPrinted = true;
-                        printerOne.Abort();
-                        Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
-                        Console.ReadLine();
+                        ce.Signal();
                     }
                 }
             }
@@ -164,7 +137,6 @@ namespace PrintApp
         /// </summary>
         public static void SendRequest()
         {
-
             while (!AllPrinted)
             {
                 lock (l)
@@ -219,6 +191,17 @@ namespace PrintApp
                 Console.WriteLine("The file could not be read:");
                 Console.WriteLine(e.Message);
             }
+        }
+
+        /// <summary>
+        /// Waits coundown event to signal and stops printing and sending requests
+        /// </summary>
+        public static void Stopper()
+        {
+            ce.Wait();
+            AllPrinted = true;
+            Console.WriteLine("\n\tALL PRINTED. . . press any key to exit");
+            Console.ReadLine();
         }
     }
 }
